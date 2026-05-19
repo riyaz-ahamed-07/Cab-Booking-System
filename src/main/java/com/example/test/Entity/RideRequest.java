@@ -22,6 +22,7 @@ public class RideRequest {
 
     private String pickupLocation;
     private String dropLocation;
+    @Column(name = "request_time", columnDefinition = "DATETIME")
     private LocalDateTime requestTime;
     private String requestStatus;
 }
