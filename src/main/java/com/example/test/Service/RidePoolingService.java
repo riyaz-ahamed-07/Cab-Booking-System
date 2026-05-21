@@ -30,6 +30,10 @@ public class RidePoolingService {
     }
 
     public Trip matchAndCreatePool(Long requestId) {
+        return matchAndCreatePool(requestId, null);
+    }
+
+    public Trip matchAndCreatePool(Long requestId, Long driverId) {
         RideRequest baseRequest = rideRequestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Ride request not found: " + requestId));
 
@@ -60,7 +64,18 @@ public class RidePoolingService {
             pool.add(candidate);
         }
 
-        Driver driver = selectDriver(pool.size());
+        Driver driver = driverId == null ? selectDriver(pool.size()) : driverRepository.findById(driverId)
+                .orElseThrow(() -> new IllegalArgumentException("Driver not found: " + driverId));
+
+        if (driverId != null) {
+            if (driver.getCapacity() == null || driver.getCapacity() < pool.size()) {
+                throw new IllegalStateException("Selected driver does not have enough capacity.");
+            }
+            if (!routeGraph.coversPickupDrop(driver.getRoute(), baseRequest.getPickupLocation(), baseRequest.getDropLocation())) {
+                throw new IllegalStateException("Selected driver route does not cover the requested pickup and drop locations.");
+            }
+        }
+
         double tripDistance = routeGraph.computeRouteDistance(baseRequest.getPickupLocation(), baseRequest.getDropLocation());
         double totalFare = Math.max(5.0, tripDistance) * FARE_PER_KM;
 
@@ -85,6 +100,13 @@ public class RidePoolingService {
         });
 
         return savedTrip;
+    }
+
+    public java.util.List<Driver> findDriversForRoute(String pickupLocation, String dropLocation) {
+        return driverRepository.findAll().stream()
+                .filter(driver -> driver.getRoute() != null)
+                .filter(driver -> routeGraph.coversPickupDrop(driver.getRoute(), pickupLocation, dropLocation))
+                .toList();
     }
 
     private boolean hasDriverForCapacity(int expectedOccupancy) {

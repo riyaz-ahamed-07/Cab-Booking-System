@@ -145,8 +145,11 @@ public class MainCLI implements CommandLineRunner {
         driver.setPhoneNumber(scanner.nextLine());
         System.out.print("Vehicle number: ");
         driver.setVehicleNumber(scanner.nextLine());
-        System.out.print("Route (start -> end): ");
+        System.out.print("Vehicle type: ");
         driver.setVehicleType(scanner.nextLine());
+        System.out.println("Recommended route stops: Kancheepuram -> Thandalam -> Chembarambakkam -> Nazarathpettai -> Poonamallee -> Koyambedu -> Anna Nagar");
+        System.out.print("Route (use -> between stops): ");
+        driver.setRoute(scanner.nextLine());
         System.out.print("Capacity: ");
         driver.setCapacity(parseInt(scanner.nextLine()));
 
@@ -181,10 +184,62 @@ public class MainCLI implements CommandLineRunner {
     }
 
     private void matchRideRequest() {
-        System.out.print("Request ID to match: ");
-        Long requestId = Long.valueOf(scanner.nextLine());
+        List<RideRequest> pendingRequests = rideRequestService.getPendingRequests();
+        if (pendingRequests.isEmpty()) {
+            System.out.println("No pending ride requests available.");
+            return;
+        }
+
+        System.out.println("Choose your pending ride request:");
+        for (int i = 0; i < pendingRequests.size(); i++) {
+            RideRequest request = pendingRequests.get(i);
+            System.out.printf("%d. [%d] %s -> %s by %s%n",
+                    i + 1,
+                    request.getRequestId(),
+                    request.getPickupLocation(),
+                    request.getDropLocation(),
+                    request.getRider().getRiderName());
+        }
+
+        System.out.print("Select request number: ");
+        int requestIndex = parseInt(scanner.nextLine()) - 1;
+        if (requestIndex < 0 || requestIndex >= pendingRequests.size()) {
+            System.out.println("Invalid request selection.");
+            return;
+        }
+
+        RideRequest selectedRequest = pendingRequests.get(requestIndex);
+        List<Driver> availableDrivers = ridePoolingService.findDriversForRoute(
+                selectedRequest.getPickupLocation(), selectedRequest.getDropLocation());
+
+        if (availableDrivers.isEmpty()) {
+            System.out.println("No active driver rides are going in your direction right now.");
+            return;
+        }
+
+        System.out.println("Available rides going your way:");
+        for (int i = 0; i < availableDrivers.size(); i++) {
+            Driver driver = availableDrivers.get(i);
+            System.out.printf("%d. %s | Route: %s | Capacity: %d | Vehicle: %s%n",
+                    i + 1,
+                    driver.getDriverName(),
+                    driver.getRoute(),
+                    driver.getCapacity(),
+                    driver.getVehicleType());
+        }
+
+        System.out.print("Select ride number: ");
+        int rideIndex = parseInt(scanner.nextLine()) - 1;
+        if (rideIndex < 0 || rideIndex >= availableDrivers.size()) {
+            System.out.println("Invalid ride selection.");
+            return;
+        }
+
+        Driver selectedDriver = availableDrivers.get(rideIndex);
         try {
-            Trip trip = ridePoolingService.matchAndCreatePool(requestId);
+            Trip trip = ridePoolingService.matchAndCreatePool(
+                    selectedRequest.getRequestId(),
+                    selectedDriver.getDriverId());
             System.out.println("Matched trip: " + trip);
         } catch (Exception e) {
             System.out.println("Match failed: " + e.getMessage());
@@ -196,7 +251,23 @@ public class MainCLI implements CommandLineRunner {
     }
 
     private void viewPooledTrips() {
-        tripService.getAllTrips().forEach(System.out::println);
+        List<Trip> trips = tripService.getAllTrips();
+        if (trips.isEmpty()) {
+            System.out.println("No pooled trips available.");
+            return;
+        }
+
+        for (Trip trip : trips) {
+            String driverName = trip.getDriver() != null ? trip.getDriver().getDriverName() : "N/A";
+            System.out.printf("Trip %d: %s -> %s | Driver: %s | Occupancy: %d | Fare: %.2f | Status: %s%n",
+                    trip.getTripId(),
+                    trip.getPickupLocation(),
+                    trip.getDropLocation(),
+                    driverName,
+                    trip.getOccupancyCount(),
+                    trip.getTotalFare(),
+                    trip.getTripStatus());
+        }
     }
 
     private void completeTrip() {

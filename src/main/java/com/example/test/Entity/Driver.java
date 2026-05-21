@@ -22,5 +22,7 @@ public class Driver {
 
     private String vehicleType;
 
+    private String route;
+
     private Integer capacity;
 }

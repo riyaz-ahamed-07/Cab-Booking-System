@@ -23,6 +23,7 @@ public class Trip {
     private Integer occupancyCount;
     private String tripStatus;
 
+    @ToString.Exclude
     @ManyToMany
     @JoinTable(
             name = "trip_riders",
